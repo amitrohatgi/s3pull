@@ -7,6 +7,7 @@ const app = express()
 const PORT = process.env.PORT
 
 let bucket = 'divrt-lpr'
+let trunc = false
 
 AWS.config.update({
     accessKeyId: process.env.AWS__ACCESSKEYID,
@@ -17,18 +18,34 @@ let s3 = new AWS.S3()
 app.get('/:bucket?', (req, res) => {
     console.log('starting app')
 
-    bucket = req.params.bucket || bucket
-    console.log({bucket})
-    
-    listAllKeys({Bucket: bucket})
-        // .then((list) => getAllImages(list))
-        // .then((images) => buildPage(images))
-        // .then((html) => res.send(html))
-        // .catch((e) => res.send(e))
-        .then(getAllImages)
-        .then(buildPage)
-        .then((html) => res.send(html))
-        .catch((e) => res.send(e))
+    if (req.query.list) {
+        s3.listBuckets({}).promise()
+        .then(results => {
+            console.log(results)
+            let startHTML = '<html style="font-family: monospace; font-size: 2em; "><body><ul style="list-style-type: square">Bucket List: <br>'
+            let endHTML = '</ul></body></html>'
+            let innerHTML = results.Buckets.map(bucket => bucket.Name) 
+            let html = startHTML + '<br><li>' + innerHTML.join('</li><br><li>') + '</li>' + endHTML
+            return res.send(html)
+        })
+        .catch(console.log)
+
+    } else {
+
+        bucket = req.params.bucket || bucket
+        trunc = req.query.trunc || trunc
+        console.log({bucket})
+        
+        listAllKeys({Bucket: bucket})
+            // .then((list) => getAllImages(list))
+            // .then((images) => buildPage(images))
+            // .then((html) => res.send(html))
+            // .catch((e) => res.send(e))
+            .then(getAllImages)
+            .then(buildPage)
+            .then((html) => res.send(html))
+            .catch((e) => res.send(e))
+    }
 })
 
 app.listen(PORT, () => {
@@ -49,7 +66,7 @@ function listAllKeys(params, out=[]) {
 
 function getAllImages(list) {
     console.log({list})
-    let promises = list.map(f => getImage({Bucket: bucket, Key: f.Key}))
+    let promises = list.slice(-trunc).map(f => getImage({Bucket: bucket, Key: f.Key}))
     return Promise.all(promises)
 }
 
@@ -64,7 +81,7 @@ function getImage(params) {
 }
 
 function buildPage(images) {
-    console.log(images)
+    // console.log(images)
     let startHTML = '<html><body><ul style="list-style-type: none">Image List: '
     let endHTML = '</ul></body></html>'
     let innerHTML = images.map( (img) => `
